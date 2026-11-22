@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1"> 
+        <title>LabDash Login</title>
+        <link rel="stylesheet" href="{{ url_for('static', filename='vendor/7.css') }}">
+        <link rel="icon" type="image/x-icon" href="/static/aeroicon.ico">
+        <style>
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: url("{{ url_for('static', filename='wallpapergrey.jpg') }}") center / cover no-repeat fixed;
+}
+.center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+
+#vladus {
+  justify-content: center;
+  align-items: center;
+}
+.window {
+  width: 320px;
+}
+
+#usernsame {
+  padding-bottom: 10px; 
+}
+input[type="text"]:focus,
+input[type="password"]:focus {
+  box-shadow: 0 0 6px 1px rgba(60, 150, 255, 0.8);
+}
+.signin-title { font-family: "Thin", sans-serif; font-weight: 300; font-size: 26px; margin: 0 0 14px; }
+.window-body.has-space { padding: 24px 28px 28px; }
+.window .window-body {
+  background: linear-gradient(to bottom, #a9d9f3 5%, #d9eefa 15%, #ffffff 80%);
+}
+.signin-title b {
+  text-shadow: 0 0 6px rgba(255, 255, 255, 0.9), 0 0 14px rgba(109, 238, 255, 0.989);
+}
+        </style>
+    </head>
+<body>
+    <div class="center">
+<div class="background">
+  <div class="window glass active" style="max-width: 100%">
+    <div class="title-bar" style="background-attachment: local;">
+      <div class="title-bar-text">LabDash</div>
+      <div class="title-bar-controls">
+        <button aria-label="Minimize"></button>
+        <button aria-label="Close"></button>
+      </div>
+  </div>
+  <div class="window-body has-space">
+    <h1 class="signin-title">Sign in to <br> THE <b>LabDash</b></h1>
+    {% if error %}
+        <p style="color:rgb(255, 40, 40);">{{ error }}</p>
+    {% endif %}
+
+    <form style="width: 220px; margin: 0 auto;" method="POST" onsubmit="return check()" novalidate>
+    <input style="display: block; width: 100%; margin: 0 0 10px; box-sizing: border-box;" type="text" id="username" name="username" placeholder="username">
+    <input style="display: block; width: 100%; margin: 0 0 10px; box-sizing: border-box;" type="password" id="passwordlogim" name="password" placeholder="password">
+    <div class="field-row" style="margin-bottom: 10px;">
+        <input type="checkbox" id="showpass" onclick="myFunction()">
+        <label for="showpass">Show Password</label>
+    </div>
+    <button style="display: block; margin: 0 auto;" type="submit">Sign in</button>
+    <div role="tooltip" id="tip" style="display:none; position:fixed; top:30px; left:50%; transform:translateX(-50%); width:max-content; max-width:90vw;">Please enter a username and password</div>
+</form>
+  </div>
+</div>
+</div>
+    <script>
+    function myFunction() {
+        var x = document.getElementById("passwordlogim");
+        if (x.type === "password") {
+            x.type = "text";
+        } else {
+            x.type = "password";
+        }
+    }
+
+    function check() {
+      var u = document.getElementById("username").value.trim();
+      var p = document.getElementById("passwordlogim").value.trim();
+      var tip = document.getElementById("tip");
+
+     if (u === "" || p === "") {
+          tip.style.display = "block";
+       return false;
+      }
+    return true;
+    }
+</script>
+</body>
+</html>
