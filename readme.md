@@ -30,7 +30,7 @@ Before running you need a SECRET_KEY
 
 ```bash
 python -c "import secrets; print(secrets.token_hex(32))"
-export LABDASH_SECRET_KEY=paste-it-here
+export SECRET_KEY=paste-it-here
 ```
 
 ### Create a user
