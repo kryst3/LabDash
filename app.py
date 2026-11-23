@@ -8,7 +8,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 from datetime import datetime, timezone
 from urllib.parse import urlparse
-from flask import Flask, render_template, request, url_for, redirect, jsonify
+from flask import Flask, render_template, request, url_for, redirect, jsonify, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_wtf.csrf import CSRFProtect
@@ -76,6 +76,7 @@ def login():
         if user and check_password_hash(user.password, password):
             sec.info(f"LOGIN_OK user={username!r} {who()}")
             login_user(user)
+            session["login_sound"] = True
             return redirect(url_for("dashboard"))
         else:
             # never log the password itself
