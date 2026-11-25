@@ -1,6 +1,7 @@
 # LabDash
 
-A self-hosted homelab dashboard styled like windows 7.
+A self-hosted homelab dashboard with a Windows 7-inspired look. View system
+stats, processes, drives, and services in one place.
 
 If you want a live demo dont hesitate to DM me on the hack club slack @RobinOSS
 
@@ -13,14 +14,14 @@ If you want a live demo dont hesitate to DM me on the hack club slack @RobinOSS
 - Drives tab: mounted partitions with filesystems
 - Services tab
 - Host info: hostname, OS, kernel, uptime and load average
-- Auto-refreshes every 2 seconds
+- Auto-refreshes every 1 second
 
 ## Setup
 
 Requires Python 3.10+
 
 ```bash
-git clone https://github.com/YOU/labdash.git
+git clone https://github.com/kryst3/labdash.git
 cd labdash
 python -m venv venv
 source venv/bin/activate
@@ -60,3 +61,35 @@ dev server, for example:
 ```bash
 gunicorn -w 1 -b 127.0.0.1:5000 app:app
 ```
+
+### Run with Docker Compose
+
+Create a persistent application secret, then build and start LabDash:
+
+```bash
+printf 'SECRET_KEY=%s\n' "$(openssl rand -hex 32)" > .env
+docker compose up --build -d
+```
+
+Create the first login account inside the running container:
+
+```bash
+docker compose exec app flask --app app create-user
+```
+
+Open http://localhost:5000 and sign in. Compose persists the SQLite database
+and security log in the `labdash-data` volume. Set `PORT` in `.env` to change
+the host port. Keep `.env` private; it contains the session-signing key.
+
+### Deploy with the interactive script
+
+From the project directory, run:
+
+```bash
+sudo bash deploy.sh
+```
+
+Choose either a systemd service (with optional Caddy-managed HTTPS for a domain)
+or Docker Compose from the menu. The Docker option asks which host HTTP port to
+publish and can create the first login account. It requires Docker Engine and
+the Docker Compose plugin to be installed; it does not install Docker for you.

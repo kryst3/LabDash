@@ -1,26 +1,98 @@
 #!/usr/bin/env bash
-# installs labdash as a systemd service on a linux server
-# run from the project folder: sudo bash setup-server.sh
-# optional: DOMAIN=your.domain (https via caddy), APP_DIR, APP_USER, PORT
+# installs labdash as a systemd service or with Docker Compose
+# run from the project folder: sudo bash deploy.sh
+# optional: DEPLOY_MODE=systemd|docker, DOMAIN=your.domain (Caddy HTTPS),
+#           APP_DIR, APP_USER, PORT
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-/opt/labdash}"
 APP_USER="${APP_USER:-labdash}"
 PORT="${PORT:-5000}"
 DOMAIN="${DOMAIN-}"
+DEPLOY_MODE="${DEPLOY_MODE-}"
 SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
 ENV_FILE="/etc/${APP_USER}.env"
 
 die() { echo "error: $*" >&2; exit 1; }
-ask() { local a; read -r -p "$1" a || true; echo "$a"; }
+ask() { local a=""; read -r -p "$1" a || true; echo "$a"; }
+
+if [ -z "$DEPLOY_MODE" ] && [ -t 0 ]; then
+    echo "Choose a deployment method:"
+    echo "  1) systemd service (optionally with Caddy HTTPS)"
+    echo "  2) Docker Compose"
+    case "$(ask 'Select [1-2]: ')" in
+        1) DEPLOY_MODE="systemd" ;;
+        2) DEPLOY_MODE="docker" ;;
+        *) die "choose 1 or 2" ;;
+    esac
+else
+    DEPLOY_MODE="${DEPLOY_MODE:-systemd}"
+fi
+
+case "$DEPLOY_MODE" in
+    systemd|docker) ;;
+    *) die "DEPLOY_MODE must be 'systemd' or 'docker'" ;;
+esac
 
 [ "$EUID" -eq 0 ] || die "run it with sudo"
-command -v systemctl >/dev/null || die "needs systemd"
 [ -f "$SRC_DIR/app.py" ] || die "app.py not found, run this from the labdash folder"
 
+if [ "$DEPLOY_MODE" = "docker" ]; then
+    [ -f "$SRC_DIR/compose.yaml" ] || die "compose.yaml not found"
+    command -v docker >/dev/null || die "install Docker and the Compose plugin first"
+    docker compose version >/dev/null || die "Docker Compose plugin is required"
+    docker info >/dev/null || die "Docker daemon is unavailable"
+
+    if [ -t 0 ]; then
+        PORT="$(ask "Host port for HTTP [${PORT}]: ")"
+        PORT="${PORT:-5000}"
+    fi
+    [[ "$PORT" =~ ^[0-9]+$ ]] && [ "$PORT" -ge 1 ] && [ "$PORT" -le 65535 ] \
+        || die "PORT must be a number from 1 to 65535"
+
+    if [ "$SRC_DIR" != "$APP_DIR" ]; then
+        command -v rsync >/dev/null || die "rsync is required to copy the app to $APP_DIR"
+        install -d "$APP_DIR"
+        rsync -a \
+            --exclude instance --exclude venv --exclude .venv --exclude node_modules \
+            --exclude __pycache__ --exclude .git --exclude .env --exclude Plan.md \
+            "$SRC_DIR"/ "$APP_DIR"/
+    fi
+
+    cd "$APP_DIR"
+    if ! grep -Eq '^SECRET_KEY=.+$' .env 2>/dev/null; then
+        umask 077
+        printf 'SECRET_KEY=%s\n' "$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')" >> .env
+    fi
+    chmod 600 .env
+
+    echo "building and starting LabDash with Docker Compose"
+    PORT="$PORT" docker compose config --quiet
+    PORT="$PORT" docker compose up --build -d
+
+    if [ -t 0 ]; then
+        case "$(ask 'Create a login account now? [y/N]: ')" in
+            y|Y) docker compose exec app flask --app app create-user ;;
+            *) echo "Create an account later with: cd '$APP_DIR' && docker compose exec app flask --app app create-user" ;;
+        esac
+    else
+        echo "Create an account later with: cd '$APP_DIR' && docker compose exec app flask --app app create-user"
+    fi
+
+    echo "done, open http://SERVER-IP:$PORT"
+    echo "database and logs persist in the Docker volume 'labdash-data'"
+    exit 0
+fi
+
+command -v systemctl >/dev/null || die "systemd is required for this deployment method"
+
 if [ -z "$DOMAIN" ] && [ -t 0 ]; then
-    echo "domain for https (leave empty for plain http on port $PORT)"
-    DOMAIN="$(ask 'domain: ')"
+    case "$(ask 'Configure Caddy HTTPS for a domain? [y/N]: ')" in
+        y|Y)
+            DOMAIN="$(ask 'Domain name: ')"
+            [ -n "$DOMAIN" ] || die "a domain is required to configure Caddy"
+            ;;
+    esac
 fi
 
 echo "installing packages"

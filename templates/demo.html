@@ -1,0 +1,219 @@
+    <!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LabDash Task Manager</title>
+  <link rel="stylesheet" href="7.css">
+  <style>
+    body { margin: 0; min-height: 100vh;
+           background: url("static/wallpapergrey.jpg") center / cover no-repeat fixed, #5a5a5a; }
+    .window { width: min(920px, calc(100% - 24px)); margin: 20px auto; }
+    .sunken-panel { height: 330px; overflow: auto; }
+    .meter { display: grid; grid-template-columns: 80px 1fr 150px; gap: 8px; align-items: center; margin: 6px 0; }
+    .cores { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+    .cores small { display: block; margin-bottom: 2px; }
+    td.num, th.num { text-align: right; }
+  </style>
+</head>
+<body>
+<div class="window glass active">
+  <div class="title-bar">
+    <div class="title-bar-text">LabDash Task Manager</div>
+    <div class="title-bar-controls">
+      <button aria-label="Minimize"></button>
+      <button aria-label="Close" onclick="location.reload()"></button>
+    </div>
+  </div>
+
+  <div class="window-body has-space">
+    <section class="tabs">
+      <menu role="tablist" aria-label="LabDash tabs">
+        <button role="tab" aria-selected="true" aria-controls="tab-perf">Performance</button>
+        <button role="tab" aria-controls="tab-proc">Processes</button>
+        <button role="tab" aria-controls="tab-drives">Drives</button>
+        <button role="tab" aria-controls="tab-svc">Services</button>
+      </menu>
+
+      <article role="tabpanel" id="tab-perf">
+        <fieldset>
+          <legend>Usage</legend>
+          <div class="meter"><span>CPU</span>
+            <div role="progressbar" id="cpu"><div style="width:0%"></div></div><span id="cpu-v">–</span></div>
+          <div class="meter"><span>Memory</span>
+            <div role="progressbar" id="ram"><div style="width:0%"></div></div><span id="ram-v">–</span></div>
+          <div class="meter"><span>Swap</span>
+            <div role="progressbar" id="swap"><div style="width:0%"></div></div><span id="swap-v">–</span></div>
+        </fieldset>
+        <fieldset>
+          <legend>CPU cores</legend>
+          <div class="cores" id="cores"></div>
+        </fieldset>
+        <fieldset>
+          <legend>System</legend>
+          <p style="margin:2px 0">Host: labbox &middot; Linux 6.6.0-demo (x86_64)</p>
+          <p style="margin:2px 0">Uptime: <span id="uptime">–</span> &middot; Load: <span id="load">–</span></p>
+        </fieldset>
+      </article>
+
+      <article role="tabpanel" id="tab-proc" hidden>
+        <div class="sunken-panel">
+          <table class="interactive">
+            <thead><tr><th class="num">PID</th><th>Name</th><th>User</th><th class="num">CPU %</th><th class="num">Memory (MB)</th></tr></thead>
+            <tbody id="procs"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article role="tabpanel" id="tab-drives" hidden>
+        <div class="sunken-panel">
+          <table class="interactive">
+            <thead><tr><th>Device</th><th>Mount</th><th>FS</th><th class="num">Used (GB)</th><th class="num">Total (GB)</th><th class="num">Use %</th></tr></thead>
+            <tbody id="drives"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article role="tabpanel" id="tab-svc" hidden>
+        <div class="sunken-panel" style="height:auto">
+          <table class="interactive">
+            <thead><tr><th>Service</th><th>Port</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td>SSH</td><td>22</td><td id="svc-ssh">–</td></tr>
+              <tr><td>HTTP</td><td>80</td><td id="svc-http">–</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+  </div>
+
+  <div class="status-bar">
+    <p class="status-bar-field">Processes: <span id="sb-procs">–</span></p>
+    <p class="status-bar-field">CPU: <span id="sb-cpu">–</span>%</p>
+    <p class="status-bar-field">Memory: <span id="sb-ram">–</span>%</p>
+    <p class="status-bar-field">User: demo</p>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+function setBar(id, pct, text) {
+  const bar = $(id);
+  bar.classList.toggle("error", pct > 90);
+  bar.firstElementChild.style.width = pct + "%";
+  $(id + "-v").textContent = text;
+}
+
+function addRow(tbody, cells) {
+  const tr = document.createElement("tr");
+  cells.forEach(([text, num]) => {
+    const td = document.createElement("td");
+    td.textContent = text;
+    if (num) td.className = "num";
+    tr.appendChild(td);
+  });
+  tbody.appendChild(tr);
+}
+
+function fmtUptime(s) {
+  const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+  return `${d}d ${h}h ${m}m`;
+}
+
+document.querySelectorAll("[role=tab]").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll("[role=tab]").forEach(t => t.setAttribute("aria-selected", t === tab));
+    document.querySelectorAll("[role=tabpanel]").forEach(p => p.hidden = p.id !== tab.getAttribute("aria-controls"));
+  });
+});
+const rnd = (a, b) => Math.random() * (b - a) + a;
+const rndInt = (a, b) => Math.floor(rnd(a, b + 1));
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const r1 = v => Math.round(v * 10) / 10;
+const r2 = v => Math.round(v * 100) / 100;
+const drift = (v, step, lo, hi) => clamp(v + rnd(-step, step), lo, hi);
+
+const RAM_TOTAL = 16, SWAP_TOTAL = 4;
+const state = { cpu: 30, cores: Array.from({length: 8}, () => rnd(5, 60)),
+                ram: rnd(35, 60), swap: rnd(0, 10), uptime: rndInt(3600, 900000) };
+
+const USERS = ["root", "demo", "www-data"];
+const procs = ["systemd","sshd","nginx","python3","code","blender","firefox","Xorg",
+  "pipewire","bash","cron","NetworkManager"].map(name => ({
+  pid: rndInt(1, 40000), name, user: USERS[rndInt(0, 2)], cpu: rnd(0, 15), mem: rnd(5, 900) }));
+
+const DRIVES = [
+  { dev: "/dev/nvme0n1p2", mount: "/", fs: "ext4", total: 476.9, used: rnd(120, 300) },
+  { dev: "/dev/sda1", mount: "/mnt/data", fs: "ext4", total: 931.5, used: rnd(200, 700) },
+];
+
+function fakeStats() {
+  state.cpu = drift(state.cpu, 15, 2, 100);
+  state.cores = state.cores.map(c => drift(c, 25, 0, 100));
+  state.ram = drift(state.ram, 2, 20, 95);
+  state.swap = drift(state.swap, 1.5, 0, 60);
+  state.uptime += 2;
+  procs.forEach(p => { p.cpu = drift(p.cpu, 6, 0, 60); p.mem = drift(p.mem, 20, 2, 1500); });
+  DRIVES.forEach(d => { d.used = drift(d.used, d.total * 0.0005, 0, d.total); });
+  return {
+    cpu: Math.round(state.cpu), ram: Math.round(state.ram),
+    ram_used: r1(RAM_TOTAL * state.ram / 100), ram_total: RAM_TOTAL,
+    swap: Math.round(state.swap), swap_used: r1(SWAP_TOTAL * state.swap / 100), swap_total: SWAP_TOTAL,
+    cores: state.cores.map(Math.round), uptime: state.uptime,
+    load: [r2(state.cpu / 25), r2(state.cpu / 28), r2(state.cpu / 30)],
+    procs: [...procs].sort((a, b) => b.cpu - a.cpu)
+      .map(p => ({ pid: p.pid, name: p.name, user: p.user, cpu: r1(p.cpu), mem: Math.round(p.mem) })),
+    proc_count: procs.length + rndInt(80, 120),
+    drives: DRIVES.map(d => ({ dev: d.dev, mount: d.mount, fs: d.fs, used: r1(d.used),
+      total: r1(d.total), percent: Math.round(d.used / d.total * 100) })),
+    services: { ssh: Math.random() > 0.05, http: Math.random() > 0.05 },
+  };
+}
+async function tick() {
+  try {
+    const s = fakeStats();
+    setBar("cpu", s.cpu, s.cpu + "%");
+    setBar("ram", s.ram, `${s.ram_used} / ${s.ram_total} GB (${s.ram}%)`);
+    setBar("swap", s.swap, s.swap_total ? `${s.swap_used} / ${s.swap_total} GB (${s.swap}%)` : "disabled");
+
+    const cores = $("cores");
+    cores.replaceChildren();
+    s.cores.forEach((c, i) => {
+      const box = document.createElement("div");
+      const label = document.createElement("small");
+      label.textContent = `Core ${i}: ${c}%`;
+      const bar = document.createElement("div");
+      bar.setAttribute("role", "progressbar");
+      if (c > 90) bar.classList.add("error");
+      const fill = document.createElement("div");
+      fill.style.width = c + "%";
+      bar.appendChild(fill);
+      box.append(label, bar);
+      cores.appendChild(box);
+    });
+
+    $("uptime").textContent = fmtUptime(s.uptime);
+    $("load").textContent = s.load.join(" / ");
+
+    const procs = $("procs"); procs.replaceChildren();
+    s.procs.forEach(p => addRow(procs, [[p.pid, true], [p.name], [p.user], [p.cpu, true], [p.mem, true]]));
+
+    const drives = $("drives"); drives.replaceChildren();
+    s.drives.forEach(d => addRow(drives, [[d.dev], [d.mount], [d.fs], [d.used, true], [d.total, true], [d.percent + "%", true]]));
+
+    $("svc-ssh").textContent = s.services.ssh ? "Running" : "Stopped";
+    $("svc-http").textContent = s.services.http ? "Running" : "Stopped";
+
+    $("sb-procs").textContent = s.proc_count;
+    $("sb-cpu").textContent = s.cpu;
+    $("sb-ram").textContent = s.ram;
+  } catch (e) { /* server briefly unreachable, try again next tick */ }
+}
+
+tick();
+setInterval(tick, 2000);
+</script>
+</body>
+</html>
