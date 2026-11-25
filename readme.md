@@ -3,6 +3,8 @@
 A self-hosted homelab dashboard with a Windows 7-inspired look. View system
 stats, processes, drives, and services in one place.
 
+For an offline demo, open `templates/demo.html`.
+
 If you want a live demo dont hesitate to DM me on the hack club slack @RobinOSS
 
 ## Features
